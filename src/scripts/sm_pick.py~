@@ -1,0 +1,408 @@
+#!/usr/bin/python
+
+import rospy
+import smach
+import smach_ros
+
+import random
+from nav_msgs.srv import *
+from cob_object_detection_msgs.msg import *
+
+from cob_generic_states_experimental.ApproachPose import *
+#from cob_generic_states_experimental.DetectObjectsFrontside import *
+
+from nav_msgs.msg import Odometry
+
+from simple_script_server import *
+sss = simple_script_server()
+
+
+
+class Init(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['ok','not_ok','failed'])
+
+	def execute(self, userdata):
+		
+		sss.init("tray")
+		sss.init("head")
+		sss.init("torso")
+		sss.init("arm")
+		sss.init("base")
+		sss.recover("tray")
+		sss.recover("head")
+		sss.recover("torso")
+		sss.recover("arm")
+		sss.recover("base")
+		
+		sss.move("head","front")
+		sss.move("arm","home")
+		sss.move("tray","deliverdown")
+		
+		return "ok"
+
+
+
+class Entrance(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s1=sss.move("base", "entrance2")
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s1.get_state() == 3): 
+				return 'reached'
+			# finished with aborted
+			elif (s1.get_state() == 4): 
+				sss.stop("base")
+				sss.stop("head")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s1.get_state() == 2) or (s1.get_state() == 8): 
+				sss.stop("base")
+				sss.stop("head")
+				return 'not_reached'
+			# return with error
+			elif (s1.get_error_code() > 0): 
+				print "error_code = " + str(s1.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+
+
+class Action(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+			
+	def execute(self, userdata):
+		s2=sss.move("torso", "shake")
+		s3=sss.move("arm", "wave", False)
+		s4=sss.move("tray", "displayup")
+		s3.wait()
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s2.get_state() == 3 ) and (s3.get_state() == 3 ) and ( s4.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s2.get_state() == 4 )or ( s3.get_state() == 4 ) or (s4.get_state() == 4):
+				sss.stop("torso")
+				sss.stop("arm")
+				sss.stop("tray")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s2.get_state() == 2) or (s2.get_state() == 8) or (s3.get_state() == 2) or (s3.get_state() == 8) or (s4.get_state() == 2) or (s4.get_state() == 8):
+				sss.stop("torso")
+				sss.stop("arm")
+				sss.stop("tray")
+				return 'not_reached'
+			# return with error
+			elif (s2.get_error_code() > 0) or (s3.get_error_code() > 0) or (s4.get_error_code() > 0):
+				print "error_code = " + str(s2.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+
+
+
+class Kitchen(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+	def execute(self, userdata):
+		sss.move("tray","deliverdown")
+		s5=sss.move("base", [-1.567,2.3,1.5])
+		sss.move("torso", "shake")
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s5.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s5.get_state() == 4):
+				sss.stop("base")
+				sss.stop("head")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s5.get_state() == 2) or (s5.get_state() == 8):
+				sss.stop("base")
+				sss.stop("head")
+				return 'not_reached'
+			# return with error
+			elif (s5.get_error_code() > 0):
+				print "error_code = " + str(s5.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+		
+class Pregrasp(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s14=sss.move("base", "kitchen")
+		s6=sss.move("arm", "pregrasp", False)
+		s12=sss.move("tray", "deliverup")
+		s6.wait()
+		s15=sss.move("arm", "grasp")
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s6.get_state() == 3) and (s12.get_state() == 3) and (s14.get_state() == 3) and (s15.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s6.get_state() == 4) or (s12.get_state() == 4) or (s14.get_state() == 4) or (s15.get_state() == 4):
+				sss.stop("arm")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s6.get_state() == 2) or (s6.get_state() == 8) or (s12.get_state() == 2) or (s12.get_state() == 8) or (s14.get_state() == 2) or (s14.get_state() == 8) or (s15.get_state() == 2) or (s15.get_state() == 8):
+				sss.stop("arm")
+				return 'not_reached'
+			# return with error
+			elif (s6.get_error_code() > 0) or (s12.get_error_code() > 0) or (s14.get_error_code() > 0) or (s15.get_error_code() > 0):
+				print "error_code = " + str(s6.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+		
+class ToTray(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s7=sss.move("arm", "pre-to-tray")
+		s16=sss.move("arm", "to-tray")
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s7.get_state() == 3) and (s16.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s7.get_state() == 4) or (s16.get_state() == 4):
+				sss.stop("arm")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s7.get_state() == 2) or (s7.get_state() == 8) or (s16.get_state() == 2) or (s16.get_state() == 8):
+				sss.stop("arm")
+				return 'not_reached'
+			# return with error
+			elif (s7.get_error_code() > 0) or (s16.get_error_code() > 0):
+				print "error_code = " + str(s7.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+class ToPosition(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s8=sss.move("base", "door")
+		
+		if (s8.get_state() == 3) and (not sss.parse):
+			print "Please press ENTER after holding the object: "
+		sss.wait_for_input()
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s8.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s8.get_state() == 4):
+				sss.stop("base")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s8.get_state() == 2) or (s8.get_state() == 8):
+				sss.stop("base")
+				return 'not_reached'
+			# return with error
+			elif (s8.get_error_code() > 0):
+				print "error_code = " + str(s8.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+class AThome(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s9=sss.move("arm", "home")
+		s10=sss.move("tray", "home")
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s9.get_state() == 3) and (s10.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s10.get_state() == 4) or (s10.get_state() == 4):
+				sss.stop("arm")
+				sss.stop("tray")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s9.get_state() == 2) or (s9.get_state() == 8) or (s10.get_state() == 2) or (s10.get_state() == 8):
+				sss.stop("arm")
+				sss.stop("tray")
+				return 'not_reached'
+			# return with error
+			elif (s9.get_error_code() > 0) or (s10.get_error_code() > 0):
+				print "error_code = " + str(s9.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+class BaseHome(smach.State):
+	def __init__(self):
+		smach.State.__init__(self, 
+			outcomes=['reached','not_reached','failed'])
+
+	def execute(self, userdata):
+		s11=sss.move("base", "home")
+		
+		while not rospy.is_shutdown():
+			
+			# finished with succeeded
+			if (s11.get_state() == 3):
+				return 'reached'
+			# finished with aborted
+			elif (s11.get_state() == 4):
+				sss.stop("base")
+				return 'not_reached'
+			# finished with preempted or canceled
+			elif (s11.get_state() == 2) or (s11.get_state() == 8):
+				sss.stop("base")
+				return 'not_reached'
+			# return with error
+			elif (s11.get_error_code() > 0):
+				print "error_code = " + str(s11.get_error_code())
+				sss.set_light("light", 'red')
+				return 'failed'
+		
+		
+		
+
+
+
+
+class Welcome(smach.StateMachine):
+	def __init__(self):
+		smach.StateMachine.__init__(self,
+								outcomes=['reached','not_reached','failed'])
+		with self:
+
+			smach.StateMachine.add('ENTRANCE',Entrance(),
+			  transitions={'reached':'ACTION',
+						   'not_reached':'ENTRANCE',
+						   'failed':'failed'})
+						   
+			smach.StateMachine.add('ACTION',Action(),
+			  transitions={'reached':'reached',
+						   'not_reached':'ACTION',
+						   'failed':'failed'})
+
+class PrepareCoffee(smach.StateMachine):
+	def __init__(self):
+		smach.StateMachine.__init__(self,
+								outcomes=['reached','not_reached','failed'])
+		with self:
+
+			smach.StateMachine.add('KITCHEN',Kitchen(),
+			  transitions={'reached':'PREGRASP',
+						   'not_reached':'KITCHEN',
+						   'failed':'failed'})
+						   
+			smach.StateMachine.add('PREGRASP',Pregrasp(),
+			  transitions={'reached':'TO_TRAY',
+						   'not_reached':'PREGRASP',
+						   'failed':'failed'})
+					
+			smach.StateMachine.add('TO_TRAY',ToTray(),
+			  transitions={'reached':'reached',
+						   'not_reached':'TO_TRAY',
+						   'failed':'failed'})
+
+
+class ToPeople(smach.StateMachine):
+	def __init__(self):
+		smach.StateMachine.__init__(self,
+								outcomes=['reached','not_reached','failed'])
+		with self:
+
+			smach.StateMachine.add('TO_POSITION',ToPosition(),
+			  transitions={'reached':'AT_HOME',
+						   'not_reached':'TO_POSITION',
+						   'failed':'failed'})
+						   
+			smach.StateMachine.add('AT_HOME',AThome(),
+			  transitions={'reached':'BASE_HOME',
+						   'not_reached':'AT_HOME',
+						   'failed':'failed'})
+					
+			smach.StateMachine.add('BASE_HOME',BaseHome(),
+			  transitions={'reached':'reached',
+						   'not_reached':'BASE_HOME',
+						   'failed':'failed'})
+
+
+
+class Move(smach.StateMachine):
+	def __init__(self):
+		smach.StateMachine.__init__(self,
+								outcomes=['finished','failed'])
+		with self:
+			
+			smach.StateMachine.add('INIT',Init(),
+			  transitions={'ok':'WELCOME',
+						   'not_ok':'INIT',
+						   'failed':'failed'})
+
+			smach.StateMachine.add('WELCOME',Welcome(),
+			  transitions={'reached':'PREPARE_COFFEE',
+						   'not_reached':'WELCOME',
+						   'failed':'failed'})
+						   
+			smach.StateMachine.add('PREPARE_COFFEE',PrepareCoffee(),
+			  transitions={'reached':'TO_PEOPLE',
+						   'not_reached':'PREPARE_COFFEE',
+						   'failed':'failed'})
+
+			smach.StateMachine.add('TO_PEOPLE',ToPeople(),
+			  transitions={'reached':'finished',
+						   'not_reached':'TO_PEOPLE',
+						   'failed':'failed'})
+
+
+
+
+
+
+class SM(smach.StateMachine):
+	def __init__(self):
+		smach.StateMachine.__init__(self,outcomes=['ended'])
+		with self:
+			smach.StateMachine.add('STATE',Move(),
+					transitions={'finished':'ended',
+					'failed':'ended'})
+
+if __name__=='__main__':
+	rospy.init_node('sm_pick')
+	sm = SM()
+	sis = smach_ros.IntrospectionServer('SM', sm, 'SM')
+	sis.start()
+	outcome = sm.execute()
+	rospy.spin()
+	sis.stop()

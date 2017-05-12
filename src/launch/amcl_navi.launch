@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+
+<launch>
+  <!-- robot settings-->
+  <arg name="robot" default="$(optenv ROBOT !!NO_ROBOT_SET!!)"/>
+  <arg name="pkg_robot_config" default="$(find ipa_navigation_config)"/>
+
+  <!-- environment seetings -->
+  <arg name="robot_env" default="$(optenv ROBOT_ENV !!NO_ROBOT_ENV_SET!!)"/>
+  <arg name="env_pack" default="$(find cob_default_env_config)" />
+  <arg name="pkg_env_config" default="$(find ipa_navigation_environment_config)"/>
+
+  <arg name="map" default="$(arg env_pack)/$(arg robot_env)/map.yaml" />
+
+  <!-- planner settings -->
+  <arg name="carlike" default="false"/>
+  <arg name="path_segment_planner" default="false"/>
+  <arg name="temp_costmap_recovery" default="false"/>
+
+ <!--- Run map_server -->
+  <node name="map_server" pkg="map_server" type="map_server" args="$(arg map)"/>
+
+  <!--- Run AMCL -->
+  <include file="$(find cob_navigation_global)/launch/amcl_node.xml" >
+    <arg name="robot" value="$(arg robot)"/>
+  </include>
+
+  <!--- Run move base -->
+  <include file="$(find ipa_navigation_bringup)/planning/move_base_eband.xml" >
+    <arg name="robot" value="$(arg robot)" />
+    <arg name="robot_env" value="$(arg robot_env)" />
+    <arg name="env_pack" value="$(arg env_pack)" />
+    <arg name="pkg_env_config" default="$(arg pkg_env_config)"/>
+    <arg name="pkg_robot_config" default="$(arg pkg_robot_config)"/>
+
+    <arg name="carlike" value="$(arg carlike)"/>
+    <arg name="path_segment_planner" value="$(arg path_segment_planner)"/>
+    <arg name="temp_costmap_recovery" value="$(arg temp_costmap_recovery)" />
+  </include>
+
+</launch>
